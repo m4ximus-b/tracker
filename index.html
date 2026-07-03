@@ -35,8 +35,21 @@
     --ease:cubic-bezier(.22,.61,.36,1);
   }
   *{box-sizing:border-box}
+  html{background:#131519}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  body{padding:26px clamp(14px,3vw,40px) 60px;line-height:1.5}
+  body{
+    line-height:1.5;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    padding-top:calc(22px + env(safe-area-inset-top,0px));
+    padding-right:calc(clamp(14px,3vw,40px) + env(safe-area-inset-right,0px));
+    padding-bottom:calc(48px + env(safe-area-inset-bottom,0px));
+    padding-left:calc(clamp(14px,3vw,40px) + env(safe-area-inset-left,0px));
+  }
+  button,.exchip,.tabs,.seg{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  .logbtn:active,.ghostbtn:active,.exchip:active,.tabs button:active{transform:scale(.97)}
+  .scroll{-webkit-overflow-scrolling:touch}
+  #chart,#liftChart{touch-action:pan-y}
   .wrap{max-width:1080px;margin:0 auto}
 
   .eyebrow{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.18em;font-weight:600;color:var(--ink-dim);font-size:12.5px}
@@ -79,7 +92,11 @@
   .field label{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.12em;font-size:11px;color:var(--ink-faint);font-weight:600}
   input[type=date],input[type=number],input[type=text]{
     background:var(--bg-well);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--ink);
-    font-family:"Space Grotesk",sans-serif;font-size:15px;padding:10px 12px;width:100%;transition:.15s var(--ease)}
+    font-family:"Space Grotesk",sans-serif;font-size:15px;padding:10px 12px;width:100%;transition:.15s var(--ease);
+    -webkit-appearance:none;appearance:none;min-height:44px}
+  input[type=date]{color-scheme:dark;text-align:left}
+  input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+  input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.7)}
   input[type=text]{font-family:"Inter",sans-serif;font-size:14px}
   input:focus{outline:none;border-color:var(--brass-deep);box-shadow:0 0 0 3px var(--brass-glow)}
   input::placeholder{color:var(--ink-faint)}
@@ -99,7 +116,8 @@
   .chart-wrap{position:relative;width:100%}
   svg{display:block;width:100%;height:auto;overflow:visible}
   .tip{position:absolute;pointer-events:none;background:#0c0e11;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:12.5px;
-    transform:translate(-50%,-115%);white-space:nowrap;opacity:0;transition:opacity .12s;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+    transform:translate(-50%,-115%);white-space:normal;max-width:min(260px,78vw);opacity:0;transition:opacity .12s;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .tip .tv{white-space:nowrap}
   .tip .td{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-faint);font-size:10.5px}
   .tip .tv{font-family:"Space Grotesk",sans-serif;font-weight:600;margin-top:2px}
   .tip .tv .tag{color:var(--brass)}
@@ -156,10 +174,22 @@
 
   @media (max-width:820px){
     .readout{grid-template-columns:repeat(2,1fr)}
-    .logbar{grid-template-columns:1fr;gap:14px;}
+    .logbar{grid-template-columns:1fr 1fr;gap:12px}
     .logbar .field.note{grid-column:1/-1}
     .logbar .logbtn{grid-column:1/-1;width:100%;min-height:48px}
     .cols{grid-template-columns:1fr}
+  }
+  /* touch devices: bigger targets, no focus-zoom */
+  @media (pointer:coarse){
+    input[type=date],input[type=number],input[type=text]{font-size:16px;min-height:48px}
+    .mform input{font-size:16px}
+    .logbtn,.ghostbtn{min-height:46px}
+    .tabs button{padding:10px 22px;font-size:15px}
+    .seg button{padding:8px 14px}
+    .exchip{padding:10px 16px}
+    .setrow input{max-width:none;flex:1}
+    #lDate{width:150px;flex:none}
+    tr .del,.lsession .ldel{padding:8px 10px}
   }
   @media (max-width:440px){
     .readout{grid-template-columns:1fr 1fr}
@@ -547,6 +577,21 @@
 
   function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+  /* Clamp a chart tooltip inside its wrapper. Call AFTER setting innerHTML.
+     fx/fy are the anchor point as fractions of the wrapper's width/height. */
+  function placeTip(tip, wrap, fx, fy){
+    const wr=wrap.getBoundingClientRect();
+    tip.style.opacity=1;
+    const tw=tip.offsetWidth, th=tip.offsetHeight, m=6;
+    let px=fx*wr.width;
+    px=Math.max(tw/2+m, Math.min(wr.width-tw/2-m, px));
+    const py=fy*wr.height;
+    const flip = (py - th - 16) < 0;            // no room above -> show below the point
+    tip.style.left=px+"px";
+    tip.style.top=py+"px";
+    tip.style.transform=flip ? "translate(-50%, 16px)" : "translate(-50%, -115%)";
+  }
+
   /* ---------- SVG chart ---------- */
   function renderChart(){
     const svg=$("#chart"), tip=$("#tip"), wrap=$("#chartWrap");
@@ -622,12 +667,10 @@
       const hx=xOf(best), hy=Y(best.weight);
       hover.style.opacity=1; hLine.setAttribute("x1",hx); hLine.setAttribute("x2",hx);
       hDot.setAttribute("cx",hx); hDot.setAttribute("cy",hy);
-      tip.style.opacity=1;
-      tip.style.left=(hx/W*100)+"%";
-      tip.style.top=(hy/H*100)+"%";
       tip.innerHTML=`<div class="td">${fmtShort(best.date)}</div>
         <div class="tv">${fmt(toDisp(best.weight))} ${uLabel()} <span class="tag">· trend ${fmt(toDisp(best.trend))}</span></div>
-        ${best.note?`<div class="td" style="margin-top:3px;letter-spacing:0;text-transform:none;color:var(--ink-dim);max-width:200px;white-space:normal">${escapeHtml(best.note)}</div>`:""}`;
+        ${best.note?`<div class="td" style="margin-top:3px;letter-spacing:0;text-transform:none;color:var(--ink-dim);white-space:normal">${escapeHtml(best.note)}</div>`:""}`;
+      placeTip(tip, wrap, hx/W, hy/H);
     }
     svg.onmousemove=move; svg.ontouchmove=e=>{move(e);};
     svg.onmouseleave=()=>{hover.style.opacity=0;tip.style.opacity=0;};
@@ -902,9 +945,9 @@
       const px=(cx-r.left)/r.width*W; let best=pts[0],bd=Infinity;
       pts.forEach(p=>{const dx=Math.abs(xOf(p)-px); if(dx<bd){bd=dx;best=p;}});
       const hx=xOf(best),hy=Y(best.v); hover.style.opacity=1; hL.setAttribute("x1",hx);hL.setAttribute("x2",hx);hD.setAttribute("cx",hx);hD.setAttribute("cy",hy);
-      tip.style.opacity=1; tip.style.left=(hx/W*100)+"%"; tip.style.top=(hy/H*100)+"%";
       const setsStr=best.s.sets.map(x=>fmt(toDisp(x.w),1)+"×"+x.r).join(" · ");
       tip.innerHTML=`<div class="td">${fmtShort(best.date)}</div><div class="tv">${fmt(toDisp(best.v),liftMetric==="volume"?0:1)} ${uLabel()} <span class="tag">${liftMetric==="e1rm"?"e1RM":liftMetric==="volume"?"vol":"top"}</span></div><div class="td" style="letter-spacing:0;text-transform:none;color:var(--ink-dim);margin-top:3px">${setsStr}</div>`;
+      placeTip(tip, $("#liftChartWrap"), hx/W, hy/H);
     }
     svg.onmousemove=move; svg.ontouchmove=e=>move(e);
     svg.onmouseleave=()=>{hover.style.opacity=0;tip.style.opacity=0;};

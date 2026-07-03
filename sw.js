@@ -1,6 +1,6 @@
 /* Training Log service worker — offline support.
    Bump CACHE when you re-upload a new version of the app. */
-const CACHE = "training-log-v1";
+const CACHE = "training-log-v2";
 const SHELL = [
   "./",
   "./index.html",
